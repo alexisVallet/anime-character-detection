@@ -1,0 +1,3 @@
+[submodule "voc-dpm"]
+	path = voc-dpm
+	url = git@github.com:rbgirshick/voc-dpm.git

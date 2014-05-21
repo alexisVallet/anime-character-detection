@@ -1,3 +1,6 @@
-[submodule "voc-dpm"]
-	path = voc-dpm
-	url = git@github.com:rbgirshick/voc-dpm.git
+[submodule "voc-dpm-anime"]
+	path = voc-dpm-anime
+	url = git@github.com:alexisVallet/voc-dpm.git
+[submodule "chardetect-data"]
+	path = chardetect-data
+	url = git@github.com:alexisVallet/chardetect-data.git

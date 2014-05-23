@@ -70,7 +70,7 @@ def divide(bigbox, smallbox):
 
     return filter(lambda bbox: boxarea(bbox) > 0, [a,b,c,d])
 
-def negative_sample_boxes(imagebox, bboxes, debug=False):
+def negative_samples_fromboxes(imagebox, bboxes, debug=False):
     """ Computes negative sample boxes covering the entire image not including the
         specified bounding boxes. The returned samples are optimal in the sense that
         they are the biggest possible rectangles (at least I think, not proved yet).
@@ -111,16 +111,26 @@ def negative_sample_boxes(imagebox, bboxes, debug=False):
         
         # Call the algorithm recursively on each division
         for division in divisions:
-            negatives += negative_sample_boxes(division, smallerBoxes)
+            negatives += negative_samples_fromboxes(division, smallerBoxes)
         return negatives
 
-def negative_samples(image, bboxes):
+def negative_samples_boxes(image, bboxes):
     rows, cols = image.shape[0:2]
     imagebox = [[0,0],[cols-1,rows-1]]
     sortedboxes = sorted(bboxes, key=boxarea, reverse=True)
-    negativeboxes = negative_sample_boxes(imagebox, sortedboxes)
+    negativeboxes = negative_samples_fromboxes(imagebox, sortedboxes)
     
     return negativeboxes
+
+def subimage(image,bbox):
+    [[ulx,uly],[drx,dry]] = bbox
+    
+    return image[uly:dry,ulx:drx,:]
+
+def negative_samples(image,bboxes):
+    negativeboxes = negative_samples_boxes(image,bboxes)
+    
+    return map(lambda bbox: subimage(image,bbox), negativeboxes)
 
 if __name__ == "__main__":
     if sys.argv < 4:
@@ -136,19 +146,12 @@ if __name__ == "__main__":
         bboxesfile = open(os.path.join(sys.argv[2], stem + '_bb.json'))
         bboxes = json.load(bboxesfile)
         bboxesfile.close()
-        # Compute the negatives, and write the boxes info to the output folder
+        # Compute the negatives, and write the negatives to the output files
         negatives = negative_samples(image, bboxes)
-        # First checks whether the negatives are indeed only background
-        andf = lambda b1, b2: b1 and b2
-        # Check that the negatives are indeed background
-        onlybg = reduce(andf, map(lambda neg: reduce(andf, map(lambda bbox: not overlapping(bbox, neg), bboxes)), negatives), True)
-        if not onlybg:
-            cv2.imshow("image", image)
-            i = 0
-            for negative in negatives:
-                [[x1,y1],[x2,y2]] = negative
-                cv2.imshow("negative " + repr(i), image[y1:y2,x1:x2,:])
-            cv2.waitKey(0)
-        outputFile = open(os.path.join(sys.argv[3], stem + '_neg.json'), 'w')
-        json.dump(negatives, outputFile)
-        outputFile.close()
+        i = 0
+        for negative in negatives:
+            # writing in png to avoid further loss in data (original images are jpeg
+            # for practicality)
+            cv2.imwrite(os.path.join(sys.argv[3], stem + '_neg_' + repr(i) + '.png'),
+                        negative)
+            i += 1

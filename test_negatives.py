@@ -9,7 +9,7 @@ import os.path
 import json
 
 class TestNegatives(unittest.TestCase):
-    def test_negative_samples(self):
+    def test_negative_samples_boxes(self):
         imagefilenames = [f for f in sorted(os.listdir(conf.imagesfolder), 
                                             key=str.lower) 
                           if f.endswith('.jpg')]
@@ -23,7 +23,7 @@ class TestNegatives(unittest.TestCase):
             bboxes = json.load(bboxesfile)
             bboxesfile.close()
             # Compute the negatives, and write the boxes info to the output folder
-            negatives = neg.negative_samples(image, bboxes)
+            negatives = neg.negative_samples_boxes(image, bboxes)
             # First checks whether the negatives are indeed only background
             andf = lambda b1, b2: b1 and b2
             # Check that the negatives are indeed background

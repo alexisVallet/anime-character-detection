@@ -1,13 +1,21 @@
 """ Script for generating negative samples out of positive ones, taking the largest
-possible background patches.
+possible background patches. 
+
+Internally uses the following data structure for bounding boxes:
+
+bbox = [[ulx,uly],[drx,dry]]
+
+Where (ulx,uly) are the coordinates of the upper-left point of the box, (drx,dry)
+those of the down-right point.
 """
+import numpy as np
 import cv2
 import json
 import os.path
 import os
 import sys
 
-def boxArea(bbox):
+def boxarea(bbox):
     """ Returns the area of a bounding box, assuming it is well formed.
     """
     [[ulx,uly], [drx,dry]] = bbox
@@ -15,15 +23,29 @@ def boxArea(bbox):
     return (drx - ulx) * (dry - uly)
 
 def overlapping(bbox1, bbox2):
+    """ True if and only if the bounding boxes are overlapping.
+    """
     [[ulx1, uly1],[drx1,dry1]] = bbox1
     [[ulx2, uly2],[drx2,dry2]] = bbox2
     return not (ulx1 > drx2 or ulx2 > drx1 or uly1 > dry2 or uly2 > dry1)
 
-def nonEmptyAndWellFormed(bbox):
-    [[ulx,uly],[drx,dry]] = bbox
-    return boxArea(bbox) > 0 and ulx < drx and uly < dry
+def intersection(bbox1, bbox2):
+    """ Computes the intersection of two overlapping bounding boxes.
+    """
+    [[ulx1, uly1],[drx1,dry1]] = bbox1
+    [[ulx2, uly2],[drx2,dry2]] = bbox2
+
+    ulx = max(ulx1,ulx2)
+    uly = max(uly1,uly2)
+    drx = min(drx1,drx2)
+    dry = min(dry1,dry2)
+
+    return [[ulx,uly],[drx,dry]]
 
 def divide(bigbox, smallbox):
+    """ Divides bigbox into 4 parts not including smallbox - which should be contained
+        in bigbox.
+    """
     [[ulx1, uly1],[drx1,dry1]] = bigbox
     [[ulx2, uly2],[drx2,dry2]] = smallbox
     w = drx1 - ulx1
@@ -46,16 +68,20 @@ def divide(bigbox, smallbox):
     # Filter out empty boxes or malformed boxes - happen when smallbox is not contained
     # within bigbox.
 
-    return filter(nonEmptyAndWellFormed, [a,b,c,d])
+    return filter(lambda bbox: boxarea(bbox) > 0, [a,b,c,d])
 
-def negative_sample_boxes(imagebox, bboxes):
+def negative_sample_boxes(imagebox, bboxes, debug=False):
     """ Computes negative sample boxes covering the entire image not including the
         specified bounding boxes. The returned samples are optimal in the sense that
         they are the biggest possible rectangles (at least I think, not proved yet).
         Assumes the bounding boxes to be sorted in decreasing order of area. Runs in
-        O(nlog(n)) where n is the number of bounding boxes.
+        O(nlog(n)) where n is the number of bounding boxes by direct application of
+        the Master theorem for divide and conquer algorithms.
     """
-    overlapbb = filter(lambda bb: overlapping(imagebox, bb), bboxes)
+    # Computes overlapping bounding boxes, and keep their intersection to the image box
+    # This kind of messes up the initial ordering, but that was a heuristic anyway.
+    overlapbb = map(lambda bb: intersection(bb,imagebox),
+                    filter(lambda bb: overlapping(imagebox, bb), bboxes))
     # If there are no overlapping bounding boxes, the image contains only background 
     # and is a valid negative sample.
     if overlapbb == []:
@@ -63,6 +89,23 @@ def negative_sample_boxes(imagebox, bboxes):
     # Otherwise, we divide the image around the largest box
     else:
         divisions = divide(imagebox, overlapbb[0])
+        # For debugging, shows divisions and boxes as they are computed
+        if debug:
+            imageul, imagedr = imagebox
+            imagerows = imagebox[1][1] - imagebox[0][1]
+            imagecols = imagebox[1][0] - imagebox[0][0]
+            image = np.ones([imagerows, imagecols, 3], dtype=np.float32)
+            for [ul,dr] in overlapbb:
+                actualul = np.array(ul) - np.array(imageul)
+                actualdr = np.array(dr) - np.array(imageul)
+                cv2.rectangle(image, tuple(ul), tuple(dr), (1,0,0), 1)
+            for [ul,dr] in divisions:
+                actualul = np.array(ul) - np.array(imageul)
+                actualdr = np.array(dr) - np.array(imageul)
+                cv2.rectangle(image, tuple(ul), tuple(dr), (0,0,1), 1)
+            cv2.namedWindow("image", cv2.WINDOW_NORMAL)
+            cv2.imshow("image", image)
+            cv2.waitKey(0)
         smallerBoxes = overlapbb[1:]
         negatives = []
         
@@ -74,7 +117,7 @@ def negative_sample_boxes(imagebox, bboxes):
 def negative_samples(image, bboxes):
     rows, cols = image.shape[0:2]
     imagebox = [[0,0],[cols-1,rows-1]]
-    sortedboxes = sorted(bboxes, key=boxArea, reverse=True)
+    sortedboxes = sorted(bboxes, key=boxarea, reverse=True)
     negativeboxes = negative_sample_boxes(imagebox, sortedboxes)
     
     return negativeboxes

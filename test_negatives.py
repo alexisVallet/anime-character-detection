@@ -28,6 +28,7 @@ class TestNegatives(unittest.TestCase):
             andf = lambda b1, b2: b1 and b2
             # Check that the negatives are indeed background
             onlybg = reduce(andf, map(lambda negval: reduce(andf, map(lambda bbox: not neg.overlapping(bbox, negval), bboxes)), negatives), True)
+            # If test fails, show debug info before assertion
             if not onlybg:
                 for [ul,dr] in bboxes:
                     cv2.rectangle(image, tuple(ul), tuple(dr), (255,0,0), 1)
@@ -38,7 +39,7 @@ class TestNegatives(unittest.TestCase):
                     cv2.imshow("negative " + repr(i), image[y1:y2,x1:x2,:])
                     i += 1
                 cv2.waitKey(0)
-#            self.assertTrue(onlybg)
+            self.assertTrue(onlybg)
 
 if __name__ == '__main__':
     unittest.main()
